@@ -12,6 +12,8 @@ public class Servidor {
 
     public static void main(String[] args) {
 
+        int contadorJ1=0;
+        int contadorJ2=0;
         ServerSocket servidor = null;
         Socket jugador1 = null;
         Socket jugador2 = null;
@@ -39,12 +41,15 @@ public class Servidor {
                 jugador2 = servidor.accept();
                 out2 = new DataOutputStream(jugador2.getOutputStream());
                 in2 = new DataInputStream(jugador2.getInputStream());
-                out2.writeUTF("Eres el Jugador 2. Ambos jugadores conectados!");
+                out2.writeUTF("Eres el Jugador 2. Esperando al  otro jugador...");
+                out2.writeUTF("Ambos jugadores conectados!");
                 System.out.println("Jugador 2 conectado");
 
                 // Avisar al jugador 1 que ya estan los dos
                 out1.writeUTF("Ambos jugadores conectados!");
 
+                contadorJ1 = 0;
+                contadorJ2 = 0;
                 int ronda = 1;
                 boolean seguirJugando = true;
 
@@ -65,11 +70,19 @@ public class Servidor {
 
                     // Determinar el resultado
                     String resultado = determinarGanador(eleccion1, eleccion2);
-                    System.out.println("Resultado: " + resultado);
+
+                    if (resultado.equals("Gana Jugador 1!")) {
+                        contadorJ1++;
+                    } else if (resultado.equals("Gana Jugador 2!")) {
+                        contadorJ2++;
+                    }
+
+                    String marcador = " | Marcador: " + contadorJ1 + "-" + contadorJ2;
+                    System.out.println("Resultado: " + resultado + marcador);
 
                     // Enviar resultado a ambos jugadores
-                    out1.writeUTF("Tu: " + eleccion1 + " | Rival: " + eleccion2 + " | " + resultado);
-                    out2.writeUTF("Tu: " + eleccion2 + " | Rival: " + eleccion1 + " | " + invertirResultado(resultado));
+                    out1.writeUTF("Tu: " + eleccion1 + " | Rival: " + eleccion2 + " | " + resultado + marcador);
+                    out2.writeUTF("Tu: " + eleccion2 + " | Rival: " + eleccion1 + " | " + invertirResultado(resultado) + marcador);
 
                     // Preguntar si quieren seguir jugando
                     out1.writeUTF("CONTINUAR");

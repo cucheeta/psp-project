@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ipconfig:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAgregar sistema de marcador al juego Piedra, Papel o Tijera\n\nSe añaden contadores para llevar el puntaje de ambos jugadores\ny se muestra el marcador actualizado después de cada ronda.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" remote -v)",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" branch -a)",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" status)",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" log --oneline -5)",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" diff --cached --stat)",
+      "Bash(git -C \"F:\\\\Programacion de Servicios\\\\02-2026\\\\PSR\" commit -m \"$\\(cat <<''EOF''\nActualizar Servidor.java\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}
