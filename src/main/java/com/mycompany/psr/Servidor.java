@@ -77,13 +77,16 @@ public class Servidor {
                         contadorJ2++;
                     }
 
-                    String marcador = " | Marcador: " + contadorJ1 + "-" + contadorJ2;
+                    String marcador = "  Marcador: " + contadorJ1 + "-" + contadorJ2;
                     System.out.println("Resultado: " + resultado + marcador);
 
                     // Enviar resultado a ambos jugadores
-                    out1.writeUTF("Tu: " + eleccion1 + " | Rival: " + eleccion2 + " | " + resultado + marcador);
-                    out2.writeUTF("Tu: " + eleccion2 + " | Rival: " + eleccion1 + " | " + invertirResultado(resultado) + marcador);
-
+                    out1.writeUTF("Tu: " + eleccion1 + "  Rival: " + eleccion2 + " -- " + resultado + marcador);
+                    out2.writeUTF("Tu: " + eleccion2 + "  Rival: " + eleccion1 + " -- " + invertirResultado(resultado) + marcador);
+                    
+                    out1.writeUTF("Marcador:" + contadorJ1 + "-" + contadorJ2);
+                    out2.writeUTF("Marcador:" + contadorJ2 + "-" + contadorJ1);
+                    
                     // Preguntar si quieren seguir jugando
                     out1.writeUTF("CONTINUAR");
                     out2.writeUTF("CONTINUAR");
