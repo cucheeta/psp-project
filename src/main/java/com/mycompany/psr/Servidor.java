@@ -1,142 +1,93 @@
 package com.mycompany.psr;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.io.InputStream;
+import java.security.KeyStore;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
 
+/**
+ * Servidor SSL de Piedra-Papel-Tijera con soporte de hilos concurrentes.
+ *
+ * - SSLServerSocket: cifra toda la comunicación con TLS.
+ * - Keystore JKS: contiene el certificado autofirmado del servidor.
+ * - Thread por partida: cada par de jugadores corre en su propio HiloJuego.
+ * - SHA-256 (via CryptoUtil): verifica integridad de cada mensaje.
+ */
 public class Servidor {
 
+    private static final int PUERTO = 5000;
+    private static final String KEYSTORE_RESOURCE = "/keystore.jks";
+    private static final String KEYSTORE_PASSWORD = "psr12345";
+
+    // Contador atómico seguro para múltiples hilos
+    private static final AtomicInteger contadorPartidas = new AtomicInteger(0);
+
     public static void main(String[] args) {
-
-        int contadorJ1=0;
-        int contadorJ2=0;
-        ServerSocket servidor = null;
-        Socket jugador1 = null;
-        Socket jugador2 = null;
-        DataInputStream in1, in2;
-        DataOutputStream out1, out2;
-
-        final int PUERTO = 5000;
+        System.out.println("=== Servidor PSR — SSL + Hilos + SHA-256 ===");
 
         try {
-            servidor = new ServerSocket(PUERTO);
-            System.out.println("Servidor de Piedra-Papel-Tijera iniciado en el puerto " + PUERTO);
+            SSLServerSocket servidor = crearServidorSSL();
+            System.out.println("Servidor SSL iniciado en el puerto " + PUERTO);
+            System.out.println("Cifrado: TLS  |  Integridad: SHA-256");
+            System.out.println("Esperando conexiones seguras...\n");
 
             while (true) {
+                // Aceptar dos jugadores para una partida
+                System.out.println("Esperando Jugador 1...");
+                SSLSocket jugador1 = (SSLSocket) servidor.accept();
+                System.out.println("Jugador 1 conectado: " + jugador1.getInetAddress() + " (TLS activo)");
 
-                // Esperar al jugador 1
-                System.out.println("\nEsperando al jugador 1...");
-                jugador1 = servidor.accept();
-                out1 = new DataOutputStream(jugador1.getOutputStream());
-                in1 = new DataInputStream(jugador1.getInputStream());
-                out1.writeUTF("Eres el Jugador 1. Esperando al otro jugador...");
-                System.out.println("Jugador 1 conectado");
+                System.out.println("Esperando Jugador 2...");
+                SSLSocket jugador2 = (SSLSocket) servidor.accept();
+                System.out.println("Jugador 2 conectado: " + jugador2.getInetAddress() + " (TLS activo)");
 
-                // Esperar al jugador 2
-                System.out.println("Esperando al jugador 2...");
-                jugador2 = servidor.accept();
-                out2 = new DataOutputStream(jugador2.getOutputStream());
-                in2 = new DataInputStream(jugador2.getInputStream());
-                out2.writeUTF("Eres el Jugador 2. Esperando al  otro jugador...");
-                out2.writeUTF("Ambos jugadores conectados!");
-                System.out.println("Jugador 2 conectado");
+                // Crear y lanzar el hilo de la partida
+                int numPartida = contadorPartidas.incrementAndGet();
+                HiloJuego hilo = new HiloJuego(jugador1, jugador2, numPartida);
+                Thread t = new Thread(hilo, "Partida-" + numPartida);
+                t.setDaemon(false);
+                t.start();
 
-                // Avisar al jugador 1 que ya estan los dos
-                out1.writeUTF("Ambos jugadores conectados!");
-
-                contadorJ1 = 0;
-                contadorJ2 = 0;
-                int ronda = 1;
-                boolean seguirJugando = true;
-
-                while (seguirJugando) {
-
-                    System.out.println("\n--- Ronda " + ronda + " ---");
-
-                    // Pedir eleccion a ambos jugadores
-                    out1.writeUTF("ELEGIR");
-                    out2.writeUTF("ELEGIR");
-
-                    // Recibir elecciones
-                    String eleccion1 = in1.readUTF().toLowerCase().trim();
-                    String eleccion2 = in2.readUTF().toLowerCase().trim();
-
-                    System.out.println("Jugador 1 eligio: " + eleccion1);
-                    System.out.println("Jugador 2 eligio: " + eleccion2);
-
-                    // Determinar el resultado
-                    String resultado = determinarGanador(eleccion1, eleccion2);
-
-                    if (resultado.equals("Gana Jugador 1!")) {
-                        contadorJ1++;
-                    } else if (resultado.equals("Gana Jugador 2!")) {
-                        contadorJ2++;
-                    }
-
-                    String marcador = "  Marcador: " + contadorJ1 + "-" + contadorJ2;
-                    System.out.println("Resultado: " + resultado + marcador);
-
-                    // Enviar resultado a ambos jugadores
-                    out1.writeUTF("Tu: " + eleccion1 + "  Rival: " + eleccion2 + " -- " + resultado + marcador);
-                    out2.writeUTF("Tu: " + eleccion2 + "  Rival: " + eleccion1 + " -- " + invertirResultado(resultado) + marcador);
-                    
-                    out1.writeUTF("Marcador:" + contadorJ1 + "-" + contadorJ2);
-                    out2.writeUTF("Marcador:" + contadorJ2 + "-" + contadorJ1);
-                    
-                    // Preguntar si quieren seguir jugando
-                    out1.writeUTF("CONTINUAR");
-                    out2.writeUTF("CONTINUAR");
-
-                    String respuesta1 = in1.readUTF().toLowerCase().trim();
-                    String respuesta2 = in2.readUTF().toLowerCase().trim();
-
-                    if (respuesta1.equals("no") || respuesta2.equals("no")) {
-                        seguirJugando = false;
-                        out1.writeUTF("FIN");
-                        out2.writeUTF("FIN");
-                    } else {
-                        out1.writeUTF("SIGUIENTE");
-                        out2.writeUTF("SIGUIENTE");
-                    }
-
-                    ronda++;
-                }
-
-                // Cerrar conexiones de ambos jugadores
-                jugador1.close();
-                jugador2.close();
-                System.out.println("Partida finalizada. Jugadores desconectados.");
+                System.out.println("Partida " + numPartida + " iniciada en hilo [" + t.getName() + "]\n");
             }
 
-        } catch (IOException ex) {
-            Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            System.err.println("Error fatal en el servidor: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
-    private static String determinarGanador(String e1, String e2) {
-        if (e1.equals(e2)) {
-            return "Empate!";
+    /**
+     * Crea un SSLServerSocket cargando el keystore desde los recursos del proyecto.
+     * El keystore contiene el par clave privada / certificado autofirmado.
+     */
+    private static SSLServerSocket crearServidorSSL() throws Exception {
+        // 1. Cargar el keystore
+        KeyStore keyStore = KeyStore.getInstance("JKS");
+        try (InputStream ks = Servidor.class.getResourceAsStream(KEYSTORE_RESOURCE)) {
+            if (ks == null) {
+                throw new RuntimeException("Keystore no encontrado en " + KEYSTORE_RESOURCE
+                        + "\nEjecuta: keytool -genkeypair -alias psr-server -keyalg RSA "
+                        + "-keystore src/main/resources/keystore.jks -storepass psr12345 -validity 365");
+            }
+            keyStore.load(ks, KEYSTORE_PASSWORD.toCharArray());
         }
 
-        if ((e1.equals("piedra") && e2.equals("tijera"))
-                || (e1.equals("tijera") && e2.equals("papel"))
-                || (e1.equals("papel") && e2.equals("piedra"))) {
-            return "Gana Jugador 1!";
-        }
+        // 2. Inicializar KeyManagerFactory con el keystore
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, KEYSTORE_PASSWORD.toCharArray());
 
-        return "Gana Jugador 2!";
-    }
+        // 3. Crear el contexto SSL con TLS
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(kmf.getKeyManagers(), null, null);
 
-    private static String invertirResultado(String resultado) {
-        if (resultado.equals("Gana Jugador 1!")) {
-            return "Gana tu rival!";
-        } else if (resultado.equals("Gana Jugador 2!")) {
-            return "Has ganado!";
-        }
-        return resultado;
+        // 4. Crear y retornar el SSLServerSocket
+        SSLServerSocketFactory factory = sslContext.getServerSocketFactory();
+        return (SSLServerSocket) factory.createServerSocket(PUERTO);
     }
 }
