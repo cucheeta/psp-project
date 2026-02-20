@@ -1,6 +1,5 @@
 package com.mycompany.psr;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.security.KeyStore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -10,84 +9,61 @@ import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocket;
 
-/**
- * Servidor SSL de Piedra-Papel-Tijera con soporte de hilos concurrentes.
- *
- * - SSLServerSocket: cifra toda la comunicación con TLS.
- * - Keystore JKS: contiene el certificado autofirmado del servidor.
- * - Thread por partida: cada par de jugadores corre en su propio HiloJuego.
- * - SHA-256 (via CryptoUtil): verifica integridad de cada mensaje.
- */
 public class Servidor {
 
     private static final int PUERTO = 5000;
-    private static final String KEYSTORE_RESOURCE = "/keystore.jks";
-    private static final String KEYSTORE_PASSWORD = "psr12345";
+    private static final String RUTA_KS = "/keystore.jks";
+    private static final String PASS_KS = "psr12345";
 
-    // Contador atómico seguro para múltiples hilos
     private static final AtomicInteger contadorPartidas = new AtomicInteger(0);
 
     public static void main(String[] args) {
-        System.out.println("=== Servidor PSR — SSL + Hilos + SHA-256 ===");
+        System.out.println(">>> Servidor PSR Iniciado (SSL/TLS)");
 
         try {
-            SSLServerSocket servidor = crearServidorSSL();
-            System.out.println("Servidor SSL iniciado en el puerto " + PUERTO);
-            System.out.println("Cifrado: TLS  |  Integridad: SHA-256");
-            System.out.println("Esperando conexiones seguras...\n");
+            SSLServerSocket socketServidor = inicializarSSL();
+            System.out.println("Escuchando en el puerto: " + PUERTO);
 
             while (true) {
-                // Aceptar dos jugadores para una partida
-                System.out.println("Esperando Jugador 1...");
-                SSLSocket jugador1 = (SSLSocket) servidor.accept();
-                System.out.println("Jugador 1 conectado: " + jugador1.getInetAddress() + " (TLS activo)");
+                System.out.println("Esperando primer cliente...");
+                SSLSocket j1 = (SSLSocket) socketServidor.accept();
+                System.out.println("J1 conectado desde: " + j1.getInetAddress());
 
-                System.out.println("Esperando Jugador 2...");
-                SSLSocket jugador2 = (SSLSocket) servidor.accept();
-                System.out.println("Jugador 2 conectado: " + jugador2.getInetAddress() + " (TLS activo)");
+                System.out.println("Esperando segundo cliente...");
+                SSLSocket j2 = (SSLSocket) socketServidor.accept();
+                System.out.println("J2 conectado desde: " + j2.getInetAddress());
 
-                // Crear y lanzar el hilo de la partida
-                int numPartida = contadorPartidas.incrementAndGet();
-                HiloJuego hilo = new HiloJuego(jugador1, jugador2, numPartida);
-                Thread t = new Thread(hilo, "Partida-" + numPartida);
-                t.setDaemon(false);
-                t.start();
+                int idPartida = contadorPartidas.incrementAndGet();
+                
+                HiloJuego gestor = new HiloJuego(j1, j2, idPartida);
+                Thread hiloPartida = new Thread(gestor, "Hilo-Partida-" + idPartida);
+                hiloPartida.start();
 
-                System.out.println("Partida " + numPartida + " iniciada en hilo [" + t.getName() + "]\n");
+                System.out.println("Partida [" + idPartida + "] lanzada correctamente.\n");
             }
 
-        } catch (Exception ex) {
-            System.err.println("Error fatal en el servidor: " + ex.getMessage());
-            ex.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("Error en el core del servidor: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    /**
-     * Crea un SSLServerSocket cargando el keystore desde los recursos del proyecto.
-     * El keystore contiene el par clave privada / certificado autofirmado.
-     */
-    private static SSLServerSocket crearServidorSSL() throws Exception {
-        // 1. Cargar el keystore
-        KeyStore keyStore = KeyStore.getInstance("JKS");
-        try (InputStream ks = Servidor.class.getResourceAsStream(KEYSTORE_RESOURCE)) {
-            if (ks == null) {
-                throw new RuntimeException("Keystore no encontrado en " + KEYSTORE_RESOURCE
-                        + "\nEjecuta: keytool -genkeypair -alias psr-server -keyalg RSA "
-                        + "-keystore src/main/resources/keystore.jks -storepass psr12345 -validity 365");
+    private static SSLServerSocket inicializarSSL() throws Exception {
+        KeyStore almacen = KeyStore.getInstance("JKS");
+        try (InputStream input = Servidor.class.getResourceAsStream(RUTA_KS)) {
+            if (input == null) {
+                throw new RuntimeException("Fichero JKS no encontrado en resources");
             }
-            keyStore.load(ks, KEYSTORE_PASSWORD.toCharArray());
+            almacen.load(input, PASS_KS.toCharArray());
         }
 
-        // 2. Inicializar KeyManagerFactory con el keystore
         KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(keyStore, KEYSTORE_PASSWORD.toCharArray());
+        kmf.init(almacen, PASS_KS.toCharArray());
 
-        // 3. Crear el contexto SSL con TLS
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(kmf.getKeyManagers(), null, null);
+        SSLContext contexto = SSLContext.getInstance("TLS");
+        contexto.init(kmf.getKeyManagers(), null, null);
 
-        // 4. Crear y retornar el SSLServerSocket
-        SSLServerSocketFactory factory = sslContext.getServerSocketFactory();
-        return (SSLServerSocket) factory.createServerSocket(PUERTO);
+        SSLServerSocketFactory fabrica = contexto.getServerSocketFactory();
+        return (SSLServerSocket) fabrica.createServerSocket(PUERTO);
     }
 }
